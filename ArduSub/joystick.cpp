@@ -85,11 +85,16 @@ void Sub::transform_manual_control_to_rc_override(int16_t x, int16_t y, int16_t 
 
     buttons_prev = buttons;
 
+    //Edits start here: neutralize throttle and lateral instead of forward/lateral
     // attitude mode:
     if (roll_pitch_flag == 1) {
     // adjust roll/pitch trim with joystick input instead of forward/lateral
-        pitchTrim = -x * rpyScale;
-        rollTrim  =  y * rpyScale;
+        //use z axis instead of x to allow pitch control with throttle axis
+        //add 500 bc z axis 0-1000 instead of -1000-1000
+        pitchTrim = (-z+500) * throttleScale;
+        //hard coded /2 to reduce roll gain, stuff in qground control not working
+        rollTrim  =  y * (rpyScale/2);
+
     }
 
     uint32_t tnow = AP_HAL::millis();
@@ -113,19 +118,22 @@ void Sub::transform_manual_control_to_rc_override(int16_t x, int16_t y, int16_t 
     RC_Channels::set_override(0, constrain_int16(pitchTrim + rpyCenter,1100,1900), tnow); // pitch
     RC_Channels::set_override(1, constrain_int16(rollTrim  + rpyCenter,1100,1900), tnow); // roll
 
-    RC_Channels::set_override(2, constrain_int16((zTot)*throttleScale+throttleBase,1100,1900), tnow); // throttle
     RC_Channels::set_override(3, constrain_int16(r*rpyScale+rpyCenter,1100,1900), tnow);                 // yaw
+    RC_Channels::set_override(4, constrain_int16((xTot)*rpyScale+rpyCenter,1100,1900), tnow); // forward for ROV
 
     // maneuver mode:
     if (roll_pitch_flag == 0) {
         // adjust forward and lateral with joystick input instead of roll and pitch
-        RC_Channels::set_override(4, constrain_int16((xTot)*rpyScale+rpyCenter,1100,1900), tnow); // forward for ROV
+        RC_Channels::set_override(2, constrain_int16((zTot)*throttleScale+throttleBase,1100,1900), tnow); // throttle
         RC_Channels::set_override(5, constrain_int16((yTot)*rpyScale+rpyCenter,1100,1900), tnow); // lateral for ROV
     } else {
         // neutralize forward and lateral input while we are adjusting roll and pitch
-        RC_Channels::set_override(4, constrain_int16(xTrim*rpyScale+rpyCenter,1100,1900), tnow); // forward for ROV
+
+        // neutral for the z axis is rpyCenter, so add zTrim to it
+        RC_Channels::set_override(2, constrain_int16(zTrim+rpyCenter,1100,1900), tnow); // throttle
         RC_Channels::set_override(5, constrain_int16(yTrim*rpyScale+rpyCenter,1100,1900), tnow); // lateral for ROV
     }
+    //edits end here
 
     RC_Channels::set_override(6, cam_pan, tnow);       // camera pan
     RC_Channels::set_override(7, cam_tilt, tnow);      // camera tilt
